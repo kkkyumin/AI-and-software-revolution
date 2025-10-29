@@ -78,7 +78,7 @@ AI 언어 모델을 이용해 해당 음식의 특징과 문화적 배경을 자
 
 이 프로젝트의 ONNX 모델은  
 [`dwililiya/food101-model-classification`](https://huggingface.co/dwililiya/food101-model-classification)의  
-**PyTorch2ONNX.ipynb** 코드를 기반으로 변환하였습니다.
+**best_model.pth**를 **PyTorch2ONNX.ipynb** 코드 기반으로 변환하였습니다.
 
 - 원본 PyTorch 모델: `best_model.pth`  
 - 변환 코드: `PyTorch2ONNX.ipynb`  
