@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FoodVision AI - Smart Food Recognition</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #FFF8F0;
+            min-height: 100vh;
+            padding: 0;
+            color: #2E1F1F;
+        }
+        
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #E63946 0%, #D85F5F 100%);
+            padding: 20px 24px;
+            color: white;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+        
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 12px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .status-badge.loading {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        
+        .status-badge.ready {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+        }
+        
+        .content {
+            padding: 24px;
+        }
+        
+        .upload-section {
+            background: #FFF8F0;
+            border: 3px dashed #E63946;
+            border-radius: 24px;
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 24px;
+        }
+        
+        .upload-section:hover {
+            background: #FFF0E5;
+            border-color: #D85F5F;
+            transform: translateY(-2px);
+        }
+        
+        .upload-section.has-image {
+            padding: 0;
+            border: none;
+            background: white;
+            box-shadow: 0 8px 32px rgba(230, 57, 70, 0.15);
+        }
+        
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+        
+        .upload-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: #E63946;
+            margin-bottom: 8px;
+        }
+        
+        .upload-subtext {
+            font-size: 14px;
+            color: #8B3A3A;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .image-preview {
+            display: none;
+            position: relative;
+        }
+        
+        .image-preview.active {
+            display: block;
+        }
+        
+        .preview-image {
+            width: 100%;
+            height: 320px;
+            object-fit: cover;
+            border-radius: 24px 24px 0 0;
+        }
+        
+        .image-actions {
+            display: flex;
+            gap: 12px;
+            padding: 16px;
+            background: white;
+            border-radius: 0 0 24px 24px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #E63946 0%, #D85F5F 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(230, 57, 70, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #F5F5F5;
+            color: #8B3A3A;
+        }
+        
+        .btn-secondary:hover {
+            background: #EFEFEF;
+        }
+        
+        .result-section {
+            display: none;
+            animation: slideUp 0.4s ease;
+        }
+        
+        .result-section.active {
+            display: block;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .result-card {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(230, 57, 70, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .food-name {
+            font-size: 32px;
+            font-weight: 800;
+            color: #E63946;
+            margin-bottom: 12px;
+            text-transform: capitalize;
+            line-height: 1.2;
+        }
+        
+        .confidence-bar {
+            margin-bottom: 24px;
+        }
+        
+        .confidence-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #8B3A3A;
+            font-weight: 600;
+        }
+        
+        .confidence-value {
+            color: #E63946;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: #FFF0E5;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #E63946 0%, #F4A261 100%);
+            border-radius: 4px;
+            transition: width 0.6s ease;
+            width: 0;
+        }
+        
+        .info-section {
+            margin-top: 24px;
+        }
+        
+        .info-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #2E1F1F;
+            margin-bottom: 16px;
+        }
+        
+        .info-content {
+            background: #FFF8F0;
+            border-radius: 16px;
+            padding: 20px;
+            line-height: 1.8;
+            font-size: 15px;
+            color: #2E1F1F;
+            border: 1px solid rgba(230, 57, 70, 0.1);
+        }
+        
+        .info-content b {
+            color: #E63946;
+            font-weight: 700;
+        }
+        
+        .loading-state {
+            display: none;
+            text-align: center;
+            padding: 32px;
+        }
+        
+        .loading-state.active {
+            display: block;
+        }
+        
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(230, 57, 70, 0.1);
+            border-top: 4px solid #E63946;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: #E63946;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .loading-subtext {
+            color: #8B3A3A;
+            font-size: 13px;
+        }
+        
+        .warning-box {
+            background: linear-gradient(135deg, #FFF5E6 0%, #FFE8CC 100%);
+            border: 2px solid #F4A261;
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            box-shadow: 0 4px 12px rgba(244, 162, 97, 0.15);
+        }
+        
+        .warning-icon {
+            font-size: 24px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+        
+        .warning-content {
+            flex: 1;
+        }
+        
+        .warning-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #E63946;
+            margin-bottom: 6px;
+        }
+        
+        .warning-text {
+            font-size: 14px;
+            color: #2E1F1F;
+            line-height: 1.6;
+        }
+        
+        .warning-text strong {
+            color: #E63946;
+            font-weight: 700;
+        }
+        
+        .tips-section {
+            background: #FFF8F0;
+            border-left: 4px solid #F4A261;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+        
+        .tips-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #E63946;
+            margin-bottom: 8px;
+        }
+        
+        .tips-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .tips-list li {
+            font-size: 13px;
+            color: #2E1F1F;
+            padding: 4px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .tips-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #E63946;
+            font-weight: 700;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 24px;
+            color: #8B3A3A;
+            font-size: 13px;
+        }
+        
+        .footer a {
+            color: #E63946;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .nutrition-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 16px;
+        }
+        
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 14px;
+            background: white;
+            border: 2px solid #FFE5E5;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #E63946;
+        }
+        
+        @media (max-width: 480px) {
+            .app-container {
+                box-shadow: none;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .food-name {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>🍽️ FoodVision AI</h1>
+            <p>Discover what you're eating with AI</p>
+            <div class="status-badge loading" id="statusBadge">
+                <span>⚡</span>
+                <span id="statusText">Loading AI Model...</span>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="upload-section" id="uploadSection">
+                <div class="upload-prompt" id="uploadPrompt">
+                    <div class="upload-icon">📸</div>
+                    <div class="upload-text">Upload Food Image</div>
+                    <div class="upload-subtext">Click or drag & drop your food photo</div>
+                </div>
+                
+                <div class="image-preview" id="imagePreview">
+                    <img id="previewImage" class="preview-image" alt="Food preview">
+                    <div class="image-actions">
+                        <button class="btn btn-secondary" id="changeImageBtn">Change Photo</button>
+                        <button class="btn btn-primary" id="analyzeBtn">Analyze Food</button>
+                    </div>
+                </div>
+            </div>
+            
+            <input type="file" id="fileInput" accept="image/*">
+            
+            <div class="loading-state" id="loadingState">
+                <div class="spinner"></div>
+                <div class="loading-text" id="loadingText">Analyzing your food...</div>
+                <div class="loading-subtext" id="loadingSubtext">Please wait a moment</div>
+            </div>
+            
+            <div class="result-section" id="resultSection">
+                <div class="result-card">
+                    <div class="food-name" id="foodName">-</div>
+                    
+                    <div class="confidence-bar">
+                        <div class="confidence-label">
+                            <span>Confidence</span>
+                            <span class="confidence-value" id="confidenceValue">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="nutrition-tags" id="nutritionTags"></div>
+                </div>
+                
+                <div class="result-card">
+                    <div class="info-section">
+                        <div class="info-title">
+                            <span>🤖</span>
+                            <span>AI Food Insights</span>
+                        </div>
+                        <div class="info-content" id="foodDescription">
+                            Analyzing food details...
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="warning-box">
+                    <div class="warning-icon">⚠️</div>
+                    <div class="warning-content">
+                        <div class="warning-title">Memory Notice</div>
+                        <div class="warning-text">
+                            For <strong>optimal performance</strong>, please <strong>refresh the page</strong> after 2-3 analyses. 
+                            This helps maintain smooth AI processing and prevents memory buildup.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tips-section">
+                    <div class="tips-title">
+                        <span>💡</span>
+                        <span>How to get better results</span>
+                    </div>
+                    <ul class="tips-list">
+                        <li>Use clear, well-lit photos</li>
+                        <li>Center the food in frame</li>
+                        <li>Avoid cluttered backgrounds</li>
+                        <li>Show the whole dish when possible</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            Powered by <a href="#" target="_blank">EfficientNet-B0</a> + <a href="#" target="_blank">LaMini-GPT-774M</a>
+        </div>
+    </div>
+
+    <script type="module">
+        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
+        
+        window.transformersPipeline = pipeline;
+        window.transformersEnv = env;
+        
+        env.allowLocalModels = false;
+        env.allowRemoteModels = true;
+
+        let session = null;
+        let llmGenerator = null;
+        
+        const FOOD_CLASSES = [
+            "apple_pie", "baby_back_ribs", "baklava", "beef_carpaccio", "beef_tartare",
+            "beet_salad", "beignets", "bibimbap", "bread_pudding", "breakfast_burrito",
+            "bruschetta", "caesar_salad", "cannoli", "caprese_salad", "carrot_cake",
+            "ceviche", "cheese_plate", "cheesecake", "chicken_curry", "chicken_quesadilla",
+            "chicken_wings", "chocolate_cake", "chocolate_mousse", "churros", "clam_chowder",
+            "club_sandwich", "crab_cakes", "creme_brulee", "croque_madame", "cup_cakes",
+            "deviled_eggs", "donuts", "dumplings", "edamame", "eggs_benedict",
+            "escargots", "falafel", "filet_mignon", "fish_and_chips", "foie_gras",
+            "french_fries", "french_onion_soup", "french_toast", "fried_calamari", "fried_rice",
+            "frozen_yogurt", "garlic_bread", "gnocchi", "greek_salad", "grilled_cheese_sandwich",
+            "grilled_salmon", "guacamole", "gyoza", "hamburger", "hot_and_sour_soup",
+            "hot_dog", "huevos_rancheros", "hummus", "ice_cream", "lasagna",
+            "lobster_bisque", "lobster_roll_sandwich", "macaroni_and_cheese", "macarons", "miso_soup",
+            "mussels", "nachos", "omelette", "onion_rings", "oysters",
+            "pad_thai", "paella", "pancakes", "panna_cotta", "peking_duck",
+            "pho", "pizza", "pork_chop", "poutine", "prime_rib",
+            "pulled_pork_sandwich", "ramen", "ravioli", "red_velvet_cake", "risotto",
+            "samosa", "sashimi", "scallops", "seaweed_salad", "shrimp_and_grits",
+            "spaghetti_bolognese", "spaghetti_carbonara", "spring_rolls", "steak", "strawberry_shortcake",
+            "sushi", "tacos", "takoyaki", "tiramisu", "tuna_tartare", "waffles"
+        ];
+        
+        const nutritionInfo = {
+            high_protein: ["steak", "chicken", "salmon", "tuna", "eggs"],
+            vegetarian: ["salad", "vegetable", "veggie", "hummus", "edamame"],
+            dessert: ["cake", "pie", "ice_cream", "mousse", "cheesecake", "tiramisu"],
+            spicy: ["curry", "kimchi", "hot"]
+        };
+
+        async function loadModel() {
+            try {
+                updateStatus('loading', 'Loading AI Model...');
+                
+                session = await ort.InferenceSession.create('model.onnx');
+                
+                updateStatus('ready', 'Model Ready - Upload a photo!');
+            } catch (error) {
+                console.error('Model load failed:', error);
+                updateStatus('error', 'Model Load Failed');
+            }
+        }
+        
+        function updateStatus(type, text) {
+            const badge = document.getElementById('statusBadge');
+            const statusText = document.getElementById('statusText');
+            
+            badge.className = `status-badge ${type}`;
+            
+            if (type === 'loading') {
+                statusText.innerHTML = '<span>⚡</span> ' + text;
+            } else if (type === 'ready') {
+                statusText.innerHTML = '<span>✅</span> ' + text;
+            } else if (type === 'error') {
+                statusText.innerHTML = '<span>❌</span> ' + text;
+            }
+        }
+
+        function preprocessImage(img) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 224;
+            canvas.height = 224;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.drawImage(img, 0, 0, 224, 224);
+            const imageData = ctx.getImageData(0, 0, 224, 224);
+            const pixels = imageData.data;
+            
+            const red = [], green = [], blue = [];
+            
+            for (let i = 0; i < pixels.length; i += 4) {
+                red.push((pixels[i] / 255.0 - 0.485) / 0.229);
+                green.push((pixels[i + 1] / 255.0 - 0.456) / 0.224);
+                blue.push((pixels[i + 2] / 255.0 - 0.406) / 0.225);
+            }
+            
+            return new ort.Tensor('float32', [...red, ...green, ...blue], [1, 3, 224, 224]);
+        }
+
+        function softmax(arr) {
+            const max = Math.max(...arr);
+            const exps = arr.map(x => Math.exp(x - max));
+            const sum = exps.reduce((a, b) => a + b);
+            return exps.map(x => x / sum);
+        }
+
+        async function predict(imageElement) {
+            if (!session) {
+                alert('Model not loaded yet!');
+                return null;
+            }
+
+            try {
+                const input = preprocessImage(imageElement);
+                const results = await session.run({ input: input });
+                const logits = Array.from(results.output.data);
+                const probs = softmax(logits);
+                
+                const maxIdx = probs.indexOf(Math.max(...probs));
+                const topFood = {
+                    class: FOOD_CLASSES[maxIdx],
+                    prob: probs[maxIdx]
+                };
+                
+                return topFood;
+            } catch (error) {
+                console.error('Prediction failed:', error);
+                return null;
+            }
+        }
+
+        async function generateDescription(foodName) {
+            const descBox = document.getElementById('foodDescription');
+            descBox.innerHTML = '🔄 Generating AI insights...';
+            
+            document.getElementById('loadingText').textContent = 'Generating food description...';
+            document.getElementById('loadingSubtext').textContent = 'AI is analyzing the dish';
+            
+            try {
+                const pipeline = window.transformersPipeline;
+                
+                if (!pipeline) {
+                    throw new Error('Transformers.js library failed to load');
+                }
+                
+                const foodDisplayName = foodName.replace(/_/g, ' ');
+                
+                if (!llmGenerator) {
+                    document.getElementById('loadingSubtext').textContent = 'Loading LaMini-GPT model (first time: 30-60s)';
+                    llmGenerator = await pipeline('text-generation', 'Xenova/LaMini-GPT-774M');
+                }
+                
+                const prompt = `Describe the food "${foodDisplayName}" in detail:
+
+1. Origin and cultural background
+2. Main ingredients and preparation
+3. Taste profile and texture
+4. Serving suggestions
+
+Description:`;
+
+                const result = await llmGenerator(prompt, {
+                    max_new_tokens: 200,
+                    temperature: 0.7,
+                    top_k: 50,
+                    top_p: 0.92,
+                    repetition_penalty: 1.2,
+                    do_sample: true,
+                    num_beams: 1
+                });
+
+                let text = result[0]?.generated_text || '';
+                
+                if (!text) {
+                    throw new Error('Model did not generate a response');
+                }
+
+                text = text.replace(prompt, '').trim();
+                text = text
+                    .replace(/\n{3,}/g, '\n\n')
+                    .replace(/^\d+\.\s*/gm, '')
+                    .trim();
+
+                const formatted = `<b>🍽️ ${foodDisplayName.toUpperCase()}</b><br><br>${text.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>')}`;
+
+                descBox.innerHTML = formatted;
+            } catch (e) {
+                console.error('LLM Error:', e);
+                
+                const foodDisplayName = foodName.replace(/_/g, ' ');
+                descBox.innerHTML = `
+                    <b>🍽️ ${foodDisplayName.toUpperCase()}</b><br><br>
+                    <b>📍 Origin:</b> This delicious ${foodDisplayName} is enjoyed around the world.<br><br>
+                    <b>🥘 About:</b> A carefully prepared dish with quality ingredients and traditional cooking methods.<br><br>
+                    <b>😋 Taste:</b> A harmonious blend of flavors that creates a memorable dining experience.<br><br>
+                    <small style="color: #8B3A3A;">※ Full AI description unavailable: ${e.message}</small>
+                `;
+            }
+        }
+        
+        function displayNutritionTags(foodName) {
+            const tagsContainer = document.getElementById('nutritionTags');
+            tagsContainer.innerHTML = '';
+            
+            const tags = [];
+            
+            if (nutritionInfo.high_protein.some(item => foodName.includes(item))) {
+                tags.push({ emoji: '💪', text: 'High Protein' });
+            }
+            if (nutritionInfo.vegetarian.some(item => foodName.includes(item))) {
+                tags.push({ emoji: '🌱', text: 'Vegetarian' });
+            }
+            if (nutritionInfo.dessert.some(item => foodName.includes(item))) {
+                tags.push({ emoji: '🍰', text: 'Dessert' });
+            }
+            if (nutritionInfo.spicy.some(item => foodName.includes(item))) {
+                tags.push({ emoji: '🌶️', text: 'Spicy' });
+            }
+            
+            // Always add Diverse in nutrition tag
+            tags.push({ emoji: '⭐', text: 'Rich Flavors' });
+            
+            tags.forEach(tag => {
+                const tagElement = document.createElement('div');
+                tagElement.className = 'tag';
+                tagElement.innerHTML = `<span>${tag.emoji}</span><span>${tag.text}</span>`;
+                tagsContainer.appendChild(tagElement);
+            });
+        }
+
+        async function analyzeFood(imageElement) {
+            const loadingState = document.getElementById('loadingState');
+            const resultSection = document.getElementById('resultSection');
+            
+            loadingState.classList.add('active');
+            resultSection.classList.remove('active');
+            
+            document.getElementById('loadingText').textContent = 'Analyzing your food...';
+            document.getElementById('loadingSubtext').textContent = 'Detecting ingredients and dish type';
+            
+            // Step 1: Predict food
+            const result = await predict(imageElement);
+            
+            if (result) {
+                const foodName = result.class.replace(/_/g, ' ');
+                const confidence = (result.prob * 100).toFixed(1);
+                
+                // Update UI
+                document.getElementById('foodName').textContent = foodName
+                    .split(' ')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+                document.getElementById('confidenceValue').textContent = confidence + '%';
+                
+                // Animate progress bar
+                setTimeout(() => {
+                    document.getElementById('progressFill').style.width = confidence + '%';
+                }, 100);
+                
+                // Display nutrition tags
+                displayNutritionTags(result.class);
+                
+                // Show results
+                loadingState.classList.remove('active');
+                resultSection.classList.add('active');
+                
+                // Step 2: Generate description (automatic)
+                await generateDescription(result.class);
+            } else {
+                loadingState.classList.remove('active');
+                alert('Failed to analyze the image. Please try again.');
+            }
+        }
+
+        // File input handling
+        const uploadSection = document.getElementById('uploadSection');
+        const fileInput = document.getElementById('fileInput');
+        const uploadPrompt = document.getElementById('uploadPrompt');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImage = document.getElementById('previewImage');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const changeImageBtn = document.getElementById('changeImageBtn');
+        
+        uploadSection.addEventListener('click', (e) => {
+            if (e.target.closest('.image-actions')) return;
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    previewImage.src = event.target.result;
+                    uploadPrompt.style.display = 'none';
+                    imagePreview.classList.add('active');
+                    uploadSection.classList.add('has-image');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        analyzeBtn.addEventListener('click', () => {
+            const img = new Image();
+            img.onload = () => analyzeFood(img);
+            img.src = previewImage.src;
+        });
+        
+        changeImageBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fileInput.click();
+        });
+        
+        // Drag and drop
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.style.borderColor = '#D85F5F';
+            uploadSection.style.background = '#FFF0E5';
+        });
+        
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.style.borderColor = '#E63946';
+            uploadSection.style.background = '#FFF8F0';
+        });
+        
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.style.borderColor = '#E63946';
+            uploadSection.style.background = '#FFF8F0';
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    previewImage.src = event.target.result;
+                    uploadPrompt.style.display = 'none';
+                    imagePreview.classList.add('active');
+                    uploadSection.classList.add('has-image');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        loadModel();
+    </script>
+</body>
+</html>
